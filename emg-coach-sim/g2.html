@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MyoCoach G2</title>
+  </head>
+  <body>
+    <main>
+      <h1>MyoCoach G2</h1>
+      <p>Pair this Even Hub app with the workout running on your computer.</p>
+      <form id="pair">
+        <label>Workout server URL <input id="server" type="url" required placeholder="http://192.168.1.10:5173" /></label>
+        <label>Session code <input id="code" maxlength="8" required autocomplete="off" placeholder="AB12" /></label>
+        <button type="submit">Connect</button>
+      </form>
+      <p id="status" role="status">Enter the address and code shown by MyoCoach.</p>
+      <h2>Glasses preview</h2>
+      <pre id="preview" aria-live="polite"></pre>
+      <p class="hint">The glasses display your set and rest status. Log reps with MyoCoach or its phone remote.</p>
+    </main>
+    <script type="module" src="/src/g2/main.ts"></script>
+  </body>
+</html>

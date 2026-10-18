@@ -1,4 +1,6 @@
 import type { WorkoutEngine } from '../engine/WorkoutEngine';
+import { EXERCISES } from '../domain/exercises';
+import { muscleLabel, type MuscleId } from '../domain/muscles';
 import { newSessionCode, wsUrl, type HostState, type PhoneMsg, type ServerMsg } from './protocol';
 
 export interface PhoneLinkStatus {
@@ -116,6 +118,24 @@ export class PhoneLink {
       inSet: s.inSet,
       reps: s.reps,
       setNo: s.slices.length + (s.inSet ? 1 : 0),
+      exerciseSetNo: s.exerciseSetNo,
+      completedExerciseSets: s.slices.filter((slice) => slice.exerciseId === EXERCISES[s.exerciseIndex].id).length,
+      targetSets: s.targetSets,
+      targetReps: s.targetReps,
+      restTargetS: s.restTargetS,
+      restRemainingS: s.restRemainingS,
+      targetMuscles: Object.entries(EXERCISES[s.exerciseIndex].profile)
+        .filter(([, weight]) => (weight ?? 0) >= 0.15)
+        .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+        .slice(0, 3)
+        .map(([id]) => muscleLabel(id as MuscleId)),
+      recentSets: s.setRecords.slice(-3).map((record) => ({
+        exerciseId: record.exerciseId,
+        exerciseSetNo: record.exerciseSetNo,
+        reps: record.reps,
+        durationS: record.durationS,
+        endedAt: record.endedAt,
+      })),
       totalReps: s.slices.reduce((a, x) => a + x.reps, 0) + s.reps,
       intensity: s.intensity,
       effort: +this.engine.effort.toFixed(3),

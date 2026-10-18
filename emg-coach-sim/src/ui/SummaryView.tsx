@@ -80,6 +80,16 @@ export function SummaryView({ engine, result, profile, onNewWorkout, onEditBody 
     setHistory(loadHistory());
   };
 
+  const exportSets = () => {
+    const payload = { schema: 'myocoach.workout.v1', session, sets: engine.getSnapshot().setRecords };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `myocoach-${session.id}.json`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const sel = selected ? MUSCLE_INDEX[selected] : -1;
   const sourceLabel = loading
     ? status?.llm ? `${status.model} · thinking` : 'thinking'
@@ -112,6 +122,7 @@ export function SummaryView({ engine, result, profile, onNewWorkout, onEditBody 
         <div className="sum-top">
           <div className="eyebrow">Review · {new Date(session.date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</div>
           <div className="sum-actions">
+            <button className="btn" onClick={exportSets}>Export set data</button>
             <button className="btn" onClick={onEditBody}>Body model</button>
             <button className="btn accent" onClick={onNewWorkout}>New session</button>
           </div>

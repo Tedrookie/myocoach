@@ -72,6 +72,15 @@ export function WorkoutView({ engine, link, profile, onEditBody, onPair }: {
           <Range label="Load" value={s.intensity} min={0.3} max={1.1} step={0.05} onChange={(v) => engine.setIntensity(v)} />
         </div>
 
+        <div className="rail-section">
+          <div className="eyebrow">Set plan · shared with G2</div>
+          <div className="goal-grid">
+            <label>Sets<input aria-label="Target sets" type="number" min="1" max="20" value={s.targetSets} onChange={(e) => engine.setGoals(Number(e.target.value), s.targetReps, s.restTargetS)} /></label>
+            <label>Reps<input aria-label="Target reps" type="number" min="1" max="100" value={s.targetReps} onChange={(e) => engine.setGoals(s.targetSets, Number(e.target.value), s.restTargetS)} /></label>
+            <label>Rest s<input aria-label="Rest seconds" type="number" min="0" max="600" value={s.restTargetS} onChange={(e) => engine.setGoals(s.targetSets, s.targetReps, Number(e.target.value))} /></label>
+          </div>
+        </div>
+
         <div className="rail-section devices">
           <div className="eyebrow">Inputs</div>
           <button className={`device ${phone.phones ? 'on' : ''}`} onClick={onPair}>
@@ -119,18 +128,18 @@ export function WorkoutView({ engine, link, profile, onEditBody, onPair }: {
           {s.inSet ? (
             <>
               <div className="hud-set-top">
-                <span className="rec" /> Set {s.slices.length + 1}
+                <span className="rec" /> Set {s.exerciseSetNo}{s.exerciseSetNo <= s.targetSets ? `/${s.targetSets}` : ' · extra'}
                 {s.autoRep && <span className="tag">auto</span>}
                 <span className="mono faint">{fmtTime(s.setDuration)}</span>
               </div>
               <div className="hud-reps">
                 <span className="mono">{String(s.reps).padStart(2, '0')}</span>
-                <span className="faint">reps</span>
+                <span className="faint">/{s.targetReps} reps · {Math.max(0, s.targetReps - s.reps)} left</span>
               </div>
             </>
           ) : (
             <>
-              <div className="hud-set-top faint">Set {s.slices.length + 1} · ready</div>
+              <div className="hud-set-top faint">{s.exerciseSetNo >= s.targetSets ? `${s.exerciseSetNo}/${s.targetSets} sets recorded` : `Set ${s.exerciseSetNo + 1}/${s.targetSets}`} · {s.restRemainingS > 0 ? `rest ${fmtTime(s.restRemainingS)}` : 'ready'}</div>
               <div className="hud-ready">
                 Hold <kbd>Space</kbd>, pull <kbd>RT</kbd>{phone.phones ? <> or tap <b>Rep</b> on your phone</> : null}
               </div>

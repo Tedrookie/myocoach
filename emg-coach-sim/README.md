@@ -44,6 +44,34 @@ Each session code is a room with one desktop host and any number of phones. The 
 
 Message types live in `src/phone/protocol.ts`. The relay only exists in `vite dev` / `vite preview`; a static host would need its own WebSocket server.
 
+### Even G2 display (`/g2.html`)
+
+The **MyoCoach G2** Even Hub app is a display-only companion. During a set it shows the exercise, target muscle groups, current/target reps, and reps remaining. After a set it shows the rest countdown and the latest saved set. The computer (or existing phone remote) remains the only workout controller. The G2 app does not require an LLM key.
+
+Each completed set is also saved immediately in browser localStorage as a structured record (`emgcoach.sets.v1`): exercise and target muscles, actual/target reps, duration, measured rest before the set, target rest, timestamps, effort setting, EMG source, and per-muscle activation load/peak. The review screen's **Export set data** button downloads the current workout as JSON. The default signal is simulated; records are labelled `simulated` until a real Web Serial EMG source is connected. Keep the computer/browser profile because these records are local to it.
+
+To run the newest local checkout and see the browser preview:
+
+```bash
+cd ~/Desktop/myocoach-updated/emg-coach-sim
+npm install --legacy-peer-deps
+npm run dev -- --port 5174 --strictPort
+```
+
+Port 5173 may still be occupied by the older `myocoach-main` checkout on this laptop, so this command uses 5174 explicitly. Open `http://localhost:5174` on the computer. Click **Connect phone** to see its 4-character session code and the computer's LAN URL. Open `http://localhost:5174/g2.html` for a browser preview; enter that LAN URL and the same code. The phone and computer must be on the same Wi-Fi. A browser preview is not proof of a successful glasses connection.
+
+For a real Even Hub Beta package, first find the computer's current LAN URL from the Connect phone dialog or `http://localhost:5174/api/session/info`. Keep the server running on port 5174. In a second terminal:
+
+```bash
+cd ~/Desktop/myocoach-updated/emg-coach-sim
+npm run g2:manifest -- http://YOUR-LAN-IP:5174
+npm run g2:pack
+```
+
+This produces `myocoach-g2.ehpk` containing only the G2 companion. The generated `app.json` whitelists that **exact** server origin; if the LAN IP or port changes, regenerate the manifest and package again. Neither file is committed. In the [Even Hub developer portal](https://hub.evenrealities.com/), create the **MyoCoach G2** app, create a Beta group containing your phone account email, upload the `.ehpk` under **Builds**, and push it to that group. Sign in to the Even Realities phone app with the same email; fully close/reopen it if the developer section is missing. Pair G2, then use **Me → Beta tester** to install the build. Open it and enter the same LAN URL and session code shown by the desktop. Complete a set on the computer to see the saved-set/rest display. Test a five-minute phone lock/resume and root-page double-tap exit before judging. Physical G2 testing and Beta upload still require your developer account and device; the browser build alone does not complete those steps.
+
+For development sideloading, use the [Even Hub CLI](https://hub.evenrealities.com/docs/reference/cli) with the live URL ending `/g2.html`. The app runs in the phone WebView and sends text to the glasses; the WebSocket relay runs only while the Vite dev/preview server is up. Do not host `dist` as static files without replacing that relay. This is workout tracking, not a medical app or diagnostic tool.
+
 ### Design
 
 Dark and calm, with one accent colour (`#ff7a45`). The cumulative heatmap is the hero of every screen.

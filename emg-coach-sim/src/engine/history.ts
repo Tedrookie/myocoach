@@ -1,5 +1,27 @@
-import { MUSCLE_IDS, zeroVector, type MuscleVector } from '../domain/muscles';
+import { MUSCLE_IDS, zeroVector, type MuscleId, type MuscleVector } from '../domain/muscles';
 import type { RiskLevel } from './risk';
+
+/** Durable, compact record of a completed set. Raw EMG samples stay in the in-memory Slice. */
+export interface SetRecord {
+  id: string;
+  workoutId: string;
+  exerciseId: string;
+  setNo: number;
+  exerciseSetNo: number;
+  targetSets: number;
+  targetReps: number;
+  targetMuscles: MuscleId[];
+  startedAt: string;
+  endedAt: string;
+  durationS: number;
+  restBeforeS: number;
+  restTargetS: number;
+  reps: number;
+  intensity: number;
+  emgSource: 'simulated' | 'webserial';
+  emgLoad: MuscleVector;
+  emgPeak: MuscleVector;
+}
 
 export interface SessionRecord {
   id: string;
@@ -14,6 +36,27 @@ export interface SessionRecord {
 }
 
 const KEY = 'emgcoach.history.v1';
+const SETS_KEY = 'emgcoach.sets.v1';
+
+export function loadSetRecords(): SetRecord[] {
+  try {
+    const raw = localStorage.getItem(SETS_KEY);
+    const list: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) return [];
+    return list.filter((s): s is SetRecord =>
+      !!s && typeof s === 'object' && typeof s.id === 'string' &&
+      typeof s.exerciseId === 'string' && Number.isFinite(s.reps) &&
+      Array.isArray(s.emgLoad) && s.emgLoad.length === MUSCLE_IDS.length,
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function appendSetRecord(record: SetRecord): void {
+  const list = [...loadSetRecords().filter((s) => s.id !== record.id), record];
+  localStorage.setItem(SETS_KEY, JSON.stringify(list.slice(-500)));
+}
 
 export function loadHistory(): SessionRecord[] {
   try {

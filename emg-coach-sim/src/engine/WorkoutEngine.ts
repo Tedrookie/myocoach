@@ -4,7 +4,7 @@ import { EmgProcessor } from '../emg/EmgProcessor';
 import { SimulatedEmgSource } from '../emg/SimulatedEmgSource';
 import type { EmgFrame, EmgSource } from '../emg/types';
 import { InputController, type InputAction } from '../input/InputController';
-import { appendSession, loadHistory, type SessionRecord } from './history';
+import { appendSession, appendSetRecord, loadHistory, type SessionRecord, type SetRecord } from './history';
 import { evaluateRisk, type RiskFlag, type RiskLevel } from './risk';
 import { SliceRecorder, sumVectors, type Slice } from './slices';
 
@@ -33,6 +33,12 @@ export interface EngineSnapshot {
   workoutLoad: MuscleVector;
   fatigue: MuscleVector;
   slices: Slice[];
+  setRecords: SetRecord[];
+  targetSets: number;
+  targetReps: number;
+  restTargetS: number;
+  restRemainingS: number;
+  exerciseSetNo: number;
   alerts: LiveAlert[];
   elapsedS: number;
   coachLine: string | null;
@@ -68,6 +74,10 @@ export class WorkoutEngine {
   private lastEmit = 0;
   private lastRiskCheck = 0;
   private startedAt = Date.now();
+  private workoutId = `w-${this.startedAt}`;
+  private lastSetEndedAt = 0;
+  private currentRestBeforeS = 0;
+  private restEndsAt = 0;
 
   exerciseIndex = 0;
   intensity = 0.75;
@@ -75,9 +85,14 @@ export class WorkoutEngine {
   effort = 0;
   private autoT = 0;
   private repUp = false;
+  private startArmed = true;
   private idle = 0;
   private recorder: SliceRecorder | null = null;
   private slices: Slice[] = [];
+  private setRecords: SetRecord[] = [];
+  targetSets = 3;
+  targetReps = 10;
+  restTargetS = 90;
   private alerts: LiveAlert[] = [];
   private alerted = new Map<MuscleId, RiskLevel>();
   private history: SessionRecord[] = loadHistory();
@@ -120,11 +135,17 @@ export class WorkoutEngine {
 
   resetWorkout() {
     this.slices = [];
+    this.setRecords = [];
     this.alerts = [];
     this.alerted.clear();
     this.recorder = null;
+    this.startArmed = true;
     this.history = loadHistory();
     this.startedAt = Date.now();
+    this.workoutId = `w-${this.startedAt}`;
+    this.lastSetEndedAt = 0;
+    this.restEndsAt = 0;
+    this.currentRestBeforeS = 0;
     this.sim.resetFatigue();
     this.emit(true);
   }
@@ -207,7 +228,8 @@ export class WorkoutEngine {
     const tau = target > this.effort ? 0.16 : 0.22;
     this.effort += (target - this.effort) * (1 - Math.exp(-dt / tau));
 
-    if (!this.recorder && this.effort > 0.3) this.startSet();
+    if (this.effort < 0.12) this.startArmed = true;
+    if (!this.recorder && this.startArmed && this.effort > 0.3) this.startSet();
 
     if (this.recorder) {
       if (this.effort > 0.7) this.repUp = true;
@@ -284,6 +306,13 @@ export class WorkoutEngine {
     this.emit(true);
   }
 
+  setGoals(targetSets: number, targetReps: number, restTargetS: number) {
+    this.targetSets = Math.min(20, Math.max(1, Math.round(targetSets) || 1));
+    this.targetReps = Math.min(100, Math.max(1, Math.round(targetReps) || 1));
+    this.restTargetS = Math.min(600, Math.max(0, Math.round(restTargetS) || 0));
+    this.emit(true);
+  }
+
   setAuto(on: boolean) {
     this.autoRep = on;
     this.autoT = 0;
@@ -293,6 +322,9 @@ export class WorkoutEngine {
 
   startSet() {
     if (this.recorder) return;
+    this.startArmed = false;
+    this.currentRestBeforeS = this.lastSetEndedAt ? Math.max(0, (Date.now() - this.lastSetEndedAt) / 1000) : 0;
+    this.restEndsAt = 0;
     this.recorder = new SliceRecorder(this.exercise.id, this.intensity);
     this.repUp = false;
     this.idle = 0;
@@ -303,8 +335,40 @@ export class WorkoutEngine {
     const rec = this.recorder;
     if (!rec) return;
     this.recorder = null;
+    this.startArmed = false;
     this.autoRep = false;
-    if (rec.reps > 0 || rec.durationS > 2) this.slices.push(rec.finish(this.slices.length + 1));
+    if (rec.reps > 0 || rec.durationS > 2) {
+      const slice = rec.finish(this.slices.length + 1);
+      this.slices.push(slice);
+      const endedAt = Date.now();
+      const record: SetRecord = {
+        id: slice.id,
+        workoutId: this.workoutId,
+        exerciseId: slice.exerciseId,
+        setNo: slice.index,
+        exerciseSetNo: this.slices.filter((s) => s.exerciseId === slice.exerciseId).length,
+        targetSets: this.targetSets,
+        targetReps: this.targetReps,
+        targetMuscles: Object.entries(this.exercise.profile)
+          .filter(([, weight]) => (weight ?? 0) >= 0.15)
+          .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+          .map(([muscle]) => muscle as MuscleId),
+        startedAt: new Date(slice.startedAt).toISOString(),
+        endedAt: new Date(endedAt).toISOString(),
+        durationS: slice.durationS,
+        restBeforeS: this.currentRestBeforeS,
+        restTargetS: this.restTargetS,
+        reps: slice.reps,
+        intensity: slice.intensity,
+        emgSource: this.source.info.kind,
+        emgLoad: [...slice.load],
+        emgPeak: [...slice.peak],
+      };
+      this.setRecords.push(record);
+      appendSetRecord(record);
+      this.lastSetEndedAt = endedAt;
+      this.restEndsAt = endedAt + this.restTargetS * 1000;
+    }
     this.emit(true);
   }
 
@@ -392,6 +456,12 @@ export class WorkoutEngine {
       workoutLoad: sumVectors(rec ? [...finished, rec.load] : finished),
       fatigue: [...this.sim.fatigue],
       slices: this.slices,
+      setRecords: this.setRecords,
+      targetSets: this.targetSets,
+      targetReps: this.targetReps,
+      restTargetS: this.restTargetS,
+      restRemainingS: rec ? 0 : Math.max(0, Math.ceil((this.restEndsAt - Date.now()) / 1000)),
+      exerciseSetNo: this.slices.filter((s) => s.exerciseId === this.exercise.id).length + (rec ? 1 : 0),
       alerts: this.alerts,
       elapsedS: (Date.now() - this.startedAt) / 1000,
       coachLine: this.coachLine,

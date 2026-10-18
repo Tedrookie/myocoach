@@ -1,4 +1,4 @@
-/** Messages exchanged over /ws/session between the desktop host and phone companions. */
+/** Messages exchanged over /ws/session between the desktop host and companions. */
 
 export interface HostState {
   type: 'state';
@@ -6,6 +6,14 @@ export interface HostState {
   inSet: boolean;
   reps: number;
   setNo: number;
+  exerciseSetNo: number;
+  completedExerciseSets: number;
+  targetSets: number;
+  targetReps: number;
+  restTargetS: number;
+  restRemainingS: number;
+  targetMuscles: string[];
+  recentSets: { exerciseId: string; exerciseSetNo: number; reps: number; durationS: number; endedAt: string }[];
   totalReps: number;
   intensity: number;
   effort: number;
@@ -34,7 +42,9 @@ export function newSessionCode(): string {
   return s;
 }
 
-export function wsUrl(code: string, role: 'host' | 'phone'): string {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${proto}://${location.host}/ws/session?code=${encodeURIComponent(code)}&role=${role}`;
+export function wsUrl(code: string, role: 'host' | 'phone', origin = location.origin): string {
+  const base = new URL(origin);
+  if (base.protocol !== 'http:' && base.protocol !== 'https:') throw new Error('Use an http or https MyoCoach server URL');
+  const proto = base.protocol === 'https:' ? 'wss' : 'ws';
+  return `${proto}://${base.host}/ws/session?code=${encodeURIComponent(code)}&role=${role}`;
 }
